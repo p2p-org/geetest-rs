@@ -1,0 +1,17 @@
+[tasks.format]
+dependencies = ["install-rustfmt-toolchain"]
+install_crate = { rustup_component_name = "rustfmt", binary = "rustfmt", test_arg = "--help" }
+toolchain = "nightly-2021-04-25"
+
+[tasks.fmt]
+alias = "format"
+
+[tasks.check-format]
+dependencies = ["install-rustfmt-toolchain"]
+install_crate = { rustup_component_name = "rustfmt", binary = "rustfmt", test_arg = "--help" }
+toolchain = "nightly-2021-04-25"
+
+[tasks.install-rustfmt-toolchain]
+condition = { files_not_exist = ["${HOME}/.rustup/toolchains/nightly-2021-04-25-x86_64-unknown-linux-gnu/bin/cargo"] }
+command = "rustup"
+args = ["toolchain", "install", "nightly-2021-04-25"]
