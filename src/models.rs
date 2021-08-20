@@ -1,6 +1,14 @@
 use serde_derive::{Deserialize, Serialize};
 use std::{net::IpAddr, time::SystemTime};
 
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct UserInfo {
+    pub user_id: Option<String>,
+    pub client_type: Option<ClientType>,
+    #[serde(with = "maybe_ipaddr_as_string")]
+    pub ip_address: Option<IpAddr>,
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct StatusRequest {
     #[serde(rename = "gt")]
@@ -19,7 +27,8 @@ pub struct ClientRegisterResponse {
     pub success: bool,
     pub new_captcha: bool,
     pub challenge: String,
-    pub gt: String,
+    #[serde(rename = "gt")]
+    pub captcha_id: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -29,23 +38,25 @@ pub struct ClientRegisterRequest {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct ClientValidateRequest {
+pub struct ClientValidateResponse {
     #[serde(with = "bool_as_string")]
     pub result: bool,
     pub version: String,
     pub msg: Option<String>,
 }
 
-pub type ClientValidateResponse = ClientValidateRequest;
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct ClientValidateRequest {
+    pub seccode: String,
+    pub challenge: String,
+}
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ServerRegisterRequest {
-    pub user_id: Option<String>,
-    pub client_type: Option<ClientType>,
-    #[serde(with = "maybe_ipaddr_as_string")]
-    pub ip_address: Option<IpAddr>,
+    #[serde(flatten)]
+    pub user_info: UserInfo,
     pub digestmod: DigestMod,
-    pub json_format: String,
+    pub json_format: u32,
     pub sdk: String,
     #[serde(rename = "gt")]
     pub captcha_id: String,
@@ -58,11 +69,10 @@ pub struct ServerRegisterResponse {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ServerValidateRequest {
-    pub user_id: Option<String>,
-    pub client_type: Option<ClientType>,
-    pub ip_address: Option<IpAddr>,
+    #[serde(flatten)]
+    pub user_info: UserInfo,
     pub digestmod: DigestMod,
-    pub json_format: String,
+    pub json_format: u32,
     pub sdk: String,
     #[serde(rename = "captchaid")]
     pub captcha_id: String,
@@ -79,10 +89,13 @@ pub struct ServerValidateResponse {
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum DigestMod {
-    MD5,
+    Md5,
+    Sha256,
+    #[serde(rename = "hmac-sha256")]
+    HmacSha256,
 }
 
-#[derive(Deserialize, Serialize, Clone, Copy, Debug)]
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ClientType {
     Web,

@@ -1,6 +1,9 @@
 use crate::{
     error::Error,
-    models::{DigestMod, ServerRegisterRequest, ServerRegisterResponse, ServerValidateRequest, ServerValidateResponse},
+    models::{
+        DigestMod, ServerRegisterRequest, ServerRegisterResponse, ServerValidateRequest, ServerValidateResponse,
+        UserInfo,
+    },
 };
 use hyper::{
     body::HttpBody,
@@ -15,20 +18,30 @@ pub static GEETEST_REGISTER_URL: &str = "https://api.geetest.com/register.php";
 pub static GEETEST_VALIDATE_URL: &str = "https://api.geetest.com/validate.php";
 pub static GEETEST_STATUS_URL: &str = "https://api.geetest.com/v1/bypass_status.php";
 
+pub static SDK: &str = "geetest rust sdk 1.0";
+
 pub struct Client {
+    pub(crate) captcha_id: String,
+    pub(crate) digestmod: DigestMod,
     client: HttpClient,
 }
 
 impl Client {
-    pub async fn register(&self) -> Result<ServerRegisterResponse, Error> {
+    pub fn new(captcha_id: String, digestmod: DigestMod) -> Self {
+        Self {
+            captcha_id,
+            digestmod,
+            client: HttpClient::new(),
+        }
+    }
+
+    pub async fn register(&self, user_info: UserInfo) -> Result<String, Error> {
         let request = ServerRegisterRequest {
-            user_id: None,
-            client_type: None,
-            ip_address: None,
-            digestmod: DigestMod::MD5,
-            json_format: "".to_string(),
-            sdk: "".to_string(),
-            captcha_id: "".to_string(),
+            user_info,
+            digestmod: self.digestmod,
+            json_format: 1,
+            sdk: SDK.to_owned(),
+            captcha_id: self.captcha_id.clone(),
         };
         let url: Uri = format!("{}?{}", GEETEST_REGISTER_URL, serde_qs::to_string(&request)?).parse()?;
 
@@ -40,21 +53,24 @@ impl Client {
             json.write_all(chunk.as_ref())?;
         }
 
-        let result = serde_json::from_slice(&json)?;
-        Ok(result)
+        let result: ServerRegisterResponse = serde_json::from_slice(&json)?;
+        Ok(result.challenge)
     }
 
-    pub async fn validate(&self) -> Result<ServerValidateResponse, Error> {
+    pub async fn validate(
+        &self,
+        seccode: String,
+        challenge: String,
+        user_info: UserInfo,
+    ) -> Result<Option<String>, Error> {
         let body = ServerValidateRequest {
-            user_id: None,
-            client_type: None,
-            ip_address: None,
-            digestmod: DigestMod::MD5,
-            json_format: "".to_string(),
-            sdk: "".to_string(),
-            captcha_id: "".to_string(),
-            seccode: "".to_string(),
-            challenge: "".to_string(),
+            user_info,
+            digestmod: self.digestmod,
+            json_format: 1,
+            sdk: SDK.to_owned(),
+            captcha_id: self.captcha_id.clone(),
+            seccode,
+            challenge,
         };
 
         let request = Request::builder()
@@ -71,7 +87,7 @@ impl Client {
             json.write_all(chunk.as_ref())?;
         }
 
-        let result = serde_json::from_slice(&json)?;
-        Ok(result)
+        let result: ServerValidateResponse = serde_json::from_slice(&json)?;
+        Ok(result.seccode)
     }
 }
