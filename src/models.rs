@@ -1,5 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
-use std::{net::IpAddr, time::SystemTime};
+use std::net::IpAddr;
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct UserInfo {

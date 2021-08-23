@@ -1,10 +1,7 @@
 use crate::{
     client::SDK,
     error::Error,
-    models::{
-        ClientRegisterRequest, ClientRegisterResponse, ClientValidateRequest, ClientValidateResponse, DigestMod,
-        UserInfo,
-    },
+    models::{ClientRegisterResponse, ClientValidateRequest, ClientValidateResponse, DigestMod, UserInfo},
 };
 use futures_util::{FutureExt, TryFutureExt};
 use hmac::{Mac, NewMac};

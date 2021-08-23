@@ -11,7 +11,7 @@ use hyper::{
     header, Body, Method, Request, Response, Uri,
 };
 use hyper_tls::HttpsConnector;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::de::DeserializeOwned;
 use std::io::Write;
 
 type HttpClient = HyperClient<HttpsConnector<HttpConnector>>;
@@ -42,7 +42,7 @@ impl Client {
             captcha_id: self.captcha_id.clone(),
         };
         let url: Uri = format!("{}?{}", GEETEST_STATUS_URL, serde_qs::to_string(&request)?).parse()?;
-        let mut reply = self.client.get(url).await?;
+        let reply = self.client.get(url).await?;
         let result: StatusResponse = Self::read_body(reply).await?;
         Ok(result.status)
     }
@@ -58,7 +58,7 @@ impl Client {
         let url: Uri = format!("{}?{}", GEETEST_REGISTER_URL, serde_qs::to_string(&request)?).parse()?;
 
         log::debug!("geetest request: {}", url);
-        let mut reply = self.client.get(url).await?;
+        let reply = self.client.get(url).await?;
         let result: ServerRegisterResponse = Self::read_body(reply).await?;
         Ok(result.challenge)
     }
@@ -85,7 +85,7 @@ impl Client {
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(serde_json::to_vec(&body)?))?;
 
-        let mut reply = self.client.request(request).await?;
+        let reply = self.client.request(request).await?;
         let result: ServerValidateResponse = Self::read_body(reply).await?;
         Ok(result.seccode)
     }
