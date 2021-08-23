@@ -41,8 +41,12 @@ pub struct ClientValidateResponse {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ClientValidateRequest {
-    pub seccode: String,
+    #[serde(rename = "geetest_challenge")]
     pub challenge: String,
+    #[serde(rename = "geetest_validate")]
+    pub validate: String,
+    #[serde(rename = "geetest_seccode")]
+    pub seccode: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
