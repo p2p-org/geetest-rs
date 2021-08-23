@@ -10,9 +10,10 @@ use hyper::{
     client::{Client as HyperClient, HttpConnector},
     header, Body, Method, Request, Uri,
 };
+use hyper_tls::HttpsConnector;
 use std::io::Write;
 
-type HttpClient = HyperClient<HttpConnector>;
+type HttpClient = HyperClient<HttpsConnector<HttpConnector>>;
 
 pub static GEETEST_REGISTER_URL: &str = "https://api.geetest.com/register.php";
 pub static GEETEST_VALIDATE_URL: &str = "https://api.geetest.com/validate.php";
@@ -31,7 +32,7 @@ impl Client {
         Self {
             captcha_id,
             digestmod,
-            client: HttpClient::new(),
+            client: HyperClient::builder().build(HttpsConnector::new()),
         }
     }
 
@@ -45,13 +46,18 @@ impl Client {
         };
         let url: Uri = format!("{}?{}", GEETEST_REGISTER_URL, serde_qs::to_string(&request)?).parse()?;
 
+        log::debug!("geetest request: {}", url);
         let mut reply = self.client.get(url).await?;
 
         let mut json = Vec::with_capacity(1024);
+
         while let Some(chunk) = reply.body_mut().data().await {
             let chunk = chunk?;
             json.write_all(chunk.as_ref())?;
         }
+
+        let json_str = String::from_utf8_lossy(&json);
+        log::debug!("geetest response: {}", json_str);
 
         let result: ServerRegisterResponse = serde_json::from_slice(&json)?;
         Ok(result.challenge)

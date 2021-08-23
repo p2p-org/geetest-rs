@@ -6,19 +6,27 @@ use crate::{
         UserInfo,
     },
 };
-use futures_util::TryFutureExt;
+use futures_util::{FutureExt, TryFutureExt};
 use hmac::{Mac, NewMac};
-use hyper::{service::Service, Method, Request, Response, StatusCode};
+use hyper::{
+    body::{Bytes, HttpBody},
+    header,
+    service::{make_service_fn, Service},
+    Body, Method, Request, Response, StatusCode,
+};
 use rand::seq::SliceRandom;
 use serde::{de::DeserializeOwned, Serialize};
 use sha2::Digest;
 use std::{
+    convert::Infallible,
     future::Future,
+    net::SocketAddr,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
 
+#[derive(Clone)]
 pub struct Server {
     client: Arc<crate::client::Client>,
     captcha_secret: String,
@@ -32,12 +40,24 @@ impl Server {
         }
     }
 
+    pub async fn run(self, addr: SocketAddr) -> Result<(), hyper::Error> {
+        hyper::Server::bind(&addr)
+            .serve(make_service_fn(move |_| {
+                let svc = self.clone();
+                async { Ok::<_, Infallible>(svc) }
+            }))
+            .await
+    }
+
     async fn handle_register(
         client: Arc<crate::client::Client>,
         captcha_secret: String,
-        _req: ClientRegisterRequest,
+        req: ClientRegisterRequest,
     ) -> Result<ClientRegisterResponse, Error> {
+        log::debug!("handle register {:?}", req);
+
         let origin_challenge = client.register(UserInfo::default()).await?;
+        log::debug!("origin challenge: {}", origin_challenge);
 
         if origin_challenge.is_empty() || origin_challenge == "0" {
             let challenge = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -107,37 +127,46 @@ impl Server {
         }
     }
 
-    async fn convert_reply<T: Serialize>(reply: T) -> Result<Response<Vec<u8>>, Error> {
+    async fn convert_reply<T: Serialize>(reply: T) -> Result<Response<Body>, Error> {
         let body = serde_json::to_vec(&reply)?;
         Response::builder()
             .status(StatusCode::OK)
-            .body(body)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
             .map_err(Into::into)
+    }
+
+    async fn read_body(mut body: Body) -> Result<Vec<u8>, Error> {
+        body.data()
+            .map(|data| Ok::<_, Error>(data.unwrap_or_else(|| Ok(Bytes::new()))?.to_vec()))
+            .await
     }
 
     async fn parse_body<T: DeserializeOwned>(body: Vec<u8>) -> Result<T, Error> {
         serde_qs::from_bytes(&body).map_err(Into::into)
     }
 
-    async fn bad_request() -> Result<Response<Vec<u8>>, Error> {
+    async fn bad_request() -> Result<Response<Body>, Error> {
         Response::builder()
             .status(StatusCode::BAD_REQUEST)
-            .body(Vec::new())
+            .body(Body::empty())
             .map_err(Into::into)
     }
 }
 
-impl Service<Request<Vec<u8>>> for Server {
-    type Response = Response<Vec<u8>>;
+impl Service<Request<Body>> for Server {
+    type Response = Response<Body>;
     type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Request<Vec<u8>>) -> Self::Future {
-        match (req.method(), req.uri().path()) {
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        let route = (req.method(), req.uri().path());
+        log::debug!("Route {:?}", route);
+        match route {
             (&Method::GET, "/register") => {
                 let (client, captcha_secret) = (self.client.clone(), self.captcha_secret.clone());
                 Box::pin(
@@ -149,7 +178,8 @@ impl Service<Request<Vec<u8>>> for Server {
             (&Method::POST, "/validate") => {
                 let client = self.client.clone();
                 Box::pin(
-                    Self::parse_body(req.into_body())
+                    Self::read_body(req.into_body())
+                        .and_then(Self::parse_body)
                         .and_then(|body| Self::handle_validate(client, body))
                         .and_then(Self::convert_reply),
                 )
