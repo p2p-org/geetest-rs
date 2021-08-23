@@ -1,4 +1,5 @@
 use crate::{
+    client::Client,
     error::Error,
     models::{ClientRegisterResponse, ClientValidateRequest, ClientValidateResponse, DigestMod, UserInfo},
 };
@@ -22,15 +23,19 @@ use std::{
 
 #[derive(Clone)]
 pub struct Server {
-    client: Arc<crate::client::Client>,
+    client: Arc<Client>,
     captcha_secret: String,
 }
 
 impl Server {
-    pub fn new(client: crate::client::Client, captcha_secret: String) -> Self {
+    pub fn new(captcha_id: impl Into<String>, captcha_secret: impl Into<String>) -> Self {
+        Self::from_client(Client::new(captcha_id, DigestMod::Md5), captcha_secret)
+    }
+
+    pub fn from_client(client: Client, captcha_secret: impl Into<String>) -> Self {
         Self {
             client: Arc::new(client),
-            captcha_secret,
+            captcha_secret: captcha_secret.into(),
         }
     }
 
@@ -43,10 +48,7 @@ impl Server {
             .await
     }
 
-    async fn handle_register(
-        client: Arc<crate::client::Client>,
-        captcha_secret: String,
-    ) -> Result<ClientRegisterResponse, Error> {
+    async fn handle_register(client: Arc<Client>, captcha_secret: String) -> Result<ClientRegisterResponse, Error> {
         log::debug!("handle register");
 
         let bypass_status = client.bypass_status().await?;
@@ -106,10 +108,7 @@ impl Server {
         }
     }
 
-    async fn handle_validate(
-        client: Arc<crate::client::Client>,
-        req: ClientValidateRequest,
-    ) -> Result<ClientValidateResponse, Error> {
+    async fn handle_validate(client: Arc<Client>, req: ClientValidateRequest) -> Result<ClientValidateResponse, Error> {
         let is_valid_request =
             !(req.challenge.trim().is_empty() || req.validate.trim().is_empty() || req.seccode.trim().is_empty());
 

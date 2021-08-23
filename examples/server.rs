@@ -32,8 +32,7 @@ async fn main() -> Result<(), Error> {
     let captcha_id = env!("GEETEST_CAPTCHA_ID");
     let captcha_secret = env!("GEETEST_CAPTCHA_SECRET");
 
-    let client = Client::new(captcha_id.to_owned(), DigestMod::Md5);
-    let server = Server::new(client, captcha_secret.to_owned());
+    let server = Server::new(captcha_id, captcha_secret);
 
     let static_server = Static {
         root: PathBuf::from("static"),

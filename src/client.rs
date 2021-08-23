@@ -29,9 +29,9 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(captcha_id: String, digestmod: DigestMod) -> Self {
+    pub fn new(captcha_id: impl Into<String>, digestmod: DigestMod) -> Self {
         Self {
-            captcha_id,
+            captcha_id: captcha_id.into(),
             digestmod,
             client: HyperClient::builder().build(HttpsConnector::new()),
         }
