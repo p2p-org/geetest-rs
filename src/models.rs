@@ -10,6 +10,27 @@ pub struct UserInfo {
     pub ip_address: Option<IpAddr>,
 }
 
+impl UserInfo {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn user_id(mut self, id: impl Into<String>) -> Self {
+        self.user_id = Some(id.into());
+        self
+    }
+
+    pub fn ip_address(mut self, ip_addr: IpAddr) -> Self {
+        self.ip_address = Some(ip_addr);
+        self
+    }
+
+    pub fn client_type(mut self, client_type: ClientType) -> Self {
+        self.client_type = Some(client_type);
+        self
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct StatusRequest {
     #[serde(rename = "gt")]

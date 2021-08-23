@@ -39,8 +39,8 @@ impl Server {
         }
     }
 
-    pub async fn run(self, addr: SocketAddr) -> Result<(), hyper::Error> {
-        hyper::Server::bind(&addr)
+    pub async fn run(self, addr: &SocketAddr) -> Result<(), hyper::Error> {
+        hyper::Server::bind(addr)
             .serve(make_service_fn(move |_| {
                 let svc = self.clone();
                 async { Ok::<_, Infallible>(svc) }

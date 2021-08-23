@@ -2,7 +2,7 @@ extern crate geetest;
 extern crate tokio;
 
 use futures_util::Stream;
-use geetest::prelude::*;
+use geetest::*;
 use hyper::{
     body::Bytes,
     header,
