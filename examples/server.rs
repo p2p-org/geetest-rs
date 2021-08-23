@@ -1,6 +1,7 @@
 extern crate geetest;
 extern crate tokio;
 
+use futures_util::Stream;
 use geetest::prelude::*;
 use hyper::{
     body::Bytes,
@@ -17,7 +18,6 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::{fs::File, io::AsyncReadExt};
-use futures_util::Stream;
 
 #[derive(Debug, Clone)]
 struct Static<T> {

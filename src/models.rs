@@ -87,8 +87,11 @@ pub struct ServerValidateResponse {
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum DigestMod {
+    #[cfg(feature = "digest-md5")]
     Md5,
+    #[cfg(feature = "digest-sha256")]
     Sha256,
+    #[cfg(feature = "digest-hmac-sha256")]
     #[serde(rename = "hmac-sha256")]
     HmacSha256,
 }

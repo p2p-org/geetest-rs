@@ -4,7 +4,6 @@ use crate::{
     models::{ClientRegisterResponse, ClientValidateRequest, ClientValidateResponse, DigestMod, UserInfo},
 };
 use futures_util::{FutureExt, TryFutureExt};
-use hmac::{Mac, NewMac};
 use hyper::{
     body::{Bytes, HttpBody},
     header,
@@ -13,7 +12,6 @@ use hyper::{
 };
 use rand::seq::SliceRandom;
 use serde::{de::DeserializeOwned, Serialize};
-use sha2::Digest;
 use std::{
     convert::Infallible,
     future::Future,
@@ -70,6 +68,7 @@ impl Server {
             })
         } else {
             let challenge = match client.digestmod {
+                #[cfg(feature = "digest-md5")]
                 DigestMod::Md5 => {
                     let mut hasher = md5::Context::new();
                     hasher.consume(origin_challenge);
@@ -77,14 +76,18 @@ impl Server {
                     let digest = hasher.compute();
                     format!("{:x}", digest)
                 },
+                #[cfg(feature = "digest-sha256")]
                 DigestMod::Sha256 => {
+                    use sha2::Digest;
                     let mut hasher = sha2::Sha256::new();
                     hasher.update(origin_challenge);
                     hasher.update(&captcha_secret);
                     let digest = hasher.finalize();
                     format!("{:x}", digest)
                 },
+                #[cfg(feature = "digest-hmac-sha256")]
                 DigestMod::HmacSha256 => {
+                    use hmac::{Mac, NewMac};
                     let mut hasher = hmac::Hmac::<sha2::Sha256>::new_from_slice(origin_challenge.as_bytes())
                         .expect("HMAC can take key of any size");
                     hasher.update(captcha_secret.as_bytes());
