@@ -1,5 +1,4 @@
 use crate::{
-    client::SDK,
     error::Error,
     models::{ClientRegisterResponse, ClientValidateRequest, ClientValidateResponse, DigestMod, UserInfo},
 };
@@ -50,23 +49,12 @@ impl Server {
     ) -> Result<ClientRegisterResponse, Error> {
         log::debug!("handle register");
 
-        let origin_challenge = client.register(UserInfo::default()).await?;
-        log::debug!("origin challenge: {}", origin_challenge);
+        let bypass_status = client.bypass_status().await?;
 
-        if origin_challenge.is_empty() || origin_challenge == "0" {
-            let challenge = "abcdefghijklmnopqrstuvwxyz0123456789"
-                .as_bytes()
-                .choose_multiple(&mut rand::thread_rng(), 32)
-                .copied()
-                .map(|b| b as char)
-                .collect();
-            Ok(ClientRegisterResponse {
-                success: false,
-                captcha_id: client.captcha_id.clone(),
-                new_captcha: true,
-                challenge,
-            })
-        } else {
+        if bypass_status {
+            let origin_challenge = client.register(UserInfo::default()).await?;
+            log::debug!("origin challenge: {}", origin_challenge);
+
             let challenge = match client.digestmod {
                 #[cfg(feature = "digest-md5")]
                 DigestMod::Md5 => {
@@ -102,6 +90,19 @@ impl Server {
                 challenge,
                 captcha_id: client.captcha_id.clone(),
             })
+        } else {
+            let challenge = "abcdefghijklmnopqrstuvwxyz0123456789"
+                .as_bytes()
+                .choose_multiple(&mut rand::thread_rng(), 32)
+                .copied()
+                .map(|b| b as char)
+                .collect();
+            Ok(ClientRegisterResponse {
+                success: false,
+                captcha_id: client.captcha_id.clone(),
+                new_captcha: true,
+                challenge,
+            })
         }
     }
 
@@ -109,20 +110,25 @@ impl Server {
         client: Arc<crate::client::Client>,
         req: ClientValidateRequest,
     ) -> Result<ClientValidateResponse, Error> {
-        let seccode = client.validate(req.seccode, req.challenge, UserInfo::default()).await?;
+        let is_valid_request =
+            !(req.challenge.trim().is_empty() || req.validate.trim().is_empty() || req.seccode.trim().is_empty());
 
-        if let Some(_) = seccode {
-            Ok(ClientValidateResponse {
-                result: true,
-                version: SDK.to_owned(),
-                msg: None,
-            })
+        if !is_valid_request {
+            return Ok(ClientValidateResponse::error("Invalid request fields"));
+        }
+
+        let bypass_status = client.bypass_status().await?;
+
+        if bypass_status {
+            let seccode = client.validate(req.seccode, req.challenge, UserInfo::default()).await?;
+
+            if let Some(_) = seccode {
+                Ok(ClientValidateResponse::success())
+            } else {
+                Ok(ClientValidateResponse::error("Invalid security code"))
+            }
         } else {
-            Ok(ClientValidateResponse {
-                result: false,
-                version: SDK.to_owned(),
-                msg: None,
-            })
+            Ok(ClientValidateResponse::success())
         }
     }
 

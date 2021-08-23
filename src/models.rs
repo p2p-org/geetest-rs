@@ -1,3 +1,4 @@
+use crate::client::SDK;
 use serde_derive::{Deserialize, Serialize};
 use std::net::IpAddr;
 
@@ -37,6 +38,24 @@ pub struct ClientValidateResponse {
     pub result: bool,
     pub version: String,
     pub msg: Option<String>,
+}
+
+impl ClientValidateResponse {
+    pub fn success() -> Self {
+        Self {
+            result: true,
+            version: SDK.to_owned(),
+            msg: None,
+        }
+    }
+
+    pub fn error(message: &str) -> Self {
+        Self {
+            result: false,
+            version: SDK.to_owned(),
+            msg: Some(message.to_owned()),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

@@ -18,7 +18,7 @@ type HttpClient = HyperClient<HttpsConnector<HttpConnector>>;
 
 pub static GEETEST_REGISTER_URL: &str = "https://api.geetest.com/register.php";
 pub static GEETEST_VALIDATE_URL: &str = "https://api.geetest.com/validate.php";
-pub static GEETEST_STATUS_URL: &str = "https://api.geetest.com/v1/bypass_status.php";
+pub static GEETEST_STATUS_URL: &str = "https://bypass.geetest.com/v1/bypass_status.php";
 
 pub static SDK: &str = "geetest rust sdk 1.0";
 
@@ -41,8 +41,13 @@ impl Client {
         let request = StatusRequest {
             captcha_id: self.captcha_id.clone(),
         };
+
         let url: Uri = format!("{}?{}", GEETEST_STATUS_URL, serde_qs::to_string(&request)?).parse()?;
+        log::debug!("geetest status request: {}", url);
+
         let reply = self.client.get(url).await?;
+        log::debug!("geetest status response: {:?}", reply);
+
         let result: StatusResponse = Self::read_body(reply).await?;
         Ok(result.status)
     }
