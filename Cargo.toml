@@ -1,7 +1,6 @@
 [package]
 name = "geetest"
 authors = ["Konstantin Stepanov <konstantin.s@p2p.org>"]
-license = "MIT"
 readme = "README.md"
 categories = ["api-bindings"]
 keywords = ["geetest", "captcha", "server", "client", "api"]
@@ -14,8 +13,8 @@ edition = "2018"
 [dependencies]
 serde = "1"
 serde_derive = "1"
-hyper = { version = "0.14", features = ["full"] }
-tokio = { version = "1", features = ["full"] }
+hyper = { version = "0.14", features = ["server", "client", "http1"] }
+tokio = "1"
 form_urlencoded = "1"
 serde_qs = "0.8"
 thiserror = "1"
@@ -37,3 +36,5 @@ default = ["digest-md5", "digest-sha256", "digest-hmac-sha256"]
 
 [dev-dependencies]
 async-stream = "0.3.2"
+hyper = { version = "0.14", features = ["server", "client", "http1", "stream"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util"] }
