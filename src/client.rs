@@ -57,8 +57,11 @@ impl Client {
         };
         let url: Uri = format!("{}?{}", GEETEST_REGISTER_URL, serde_qs::to_string(&request)?).parse()?;
 
-        log::debug!("geetest request: {}", url);
+        log::debug!("geetest register request: {}", url);
+
         let reply = self.client.get(url).await?;
+        log::debug!("geetest register response: {:?}", reply);
+
         let result: ServerRegisterResponse = Self::read_body(reply).await?;
         Ok(result.challenge)
     }
@@ -79,13 +82,17 @@ impl Client {
             challenge,
         };
 
+        log::debug!("geetest validate request: {:?}", body);
+
         let request = Request::builder()
             .method(Method::POST)
             .uri(GEETEST_VALIDATE_URL)
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(serde_json::to_vec(&body)?))?;
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from(serde_qs::to_string(&body)?))?;
 
         let reply = self.client.request(request).await?;
+        log::debug!("geetest validate response: {:?}", reply);
+
         let result: ServerValidateResponse = Self::read_body(reply).await?;
         Ok(result.seccode)
     }
@@ -96,6 +103,7 @@ impl Client {
             let chunk = chunk?;
             json.write_all(chunk.as_ref())?;
         }
+        log::debug!("read body: {}", String::from_utf8_lossy(&json));
         Ok(serde_json::from_slice(&json)?)
     }
 }

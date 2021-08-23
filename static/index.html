@@ -68,7 +68,7 @@
 </head>
 <body>
 <h1>GeeTest SDK DEMO</h1>
-<form action="validate" method="post">
+<form action="/validate" method="post">
     <br>
     <div>
         <label for="username">Username</label>
@@ -92,7 +92,7 @@
 </form>
 
 <!-- The verification code doesn't require jquery, it's for demo purposes only to save some code -->
-<script src="http://apps.bdimg.com/libs/jquery/1.9.1/jquery.js"></script>
+<script src="https://code.jquery.com/jquery-1.9.1.min.js"></script>
 
 <!-- The official gt.js library provides initGeetest() function -->
 <script src="/static/gt.js"></script>
@@ -115,7 +115,7 @@
         });
     };
     $.ajax({
-        url: "register?t=" + (new Date()).getTime(), // cache prevention
+        url: "/register?t=" + (new Date()).getTime(), // cache prevention
         type: "get",
         dataType: "json",
         success: function (data) {
