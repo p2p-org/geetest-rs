@@ -32,12 +32,6 @@ pub struct ClientRegisterResponse {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct ClientRegisterRequest {
-    #[serde(rename = "t", with = "system_time_as_timestamp")]
-    pub timestamp: SystemTime,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ClientValidateResponse {
     #[serde(with = "bool_as_string")]
     pub result: bool,
@@ -151,22 +145,6 @@ mod maybe_seccode {
     }
 }
 
-mod system_time_as_timestamp {
-    use serde::{Deserialize, Deserializer, Serializer};
-    use std::time::{Duration, SystemTime};
-
-    pub(crate) fn serialize<S: Serializer>(value: &SystemTime, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_u64(
-            value
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .map_or_else(|_| 0, |duration| duration.as_secs()),
-        )
-    }
-
-    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<SystemTime, D::Error> {
-        u64::deserialize(d).map(|value| SystemTime::UNIX_EPOCH + Duration::from_secs(value))
-    }
-}
 mod maybe_ipaddr_as_string {
     use serde::{de::Unexpected, Deserialize, Deserializer, Serializer};
     use std::net::IpAddr;

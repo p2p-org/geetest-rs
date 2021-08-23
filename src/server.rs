@@ -52,9 +52,8 @@ impl Server {
     async fn handle_register(
         client: Arc<crate::client::Client>,
         captcha_secret: String,
-        req: ClientRegisterRequest,
     ) -> Result<ClientRegisterResponse, Error> {
-        log::debug!("handle register {:?}", req);
+        log::debug!("handle register");
 
         let origin_challenge = client.register(UserInfo::default()).await?;
         log::debug!("origin challenge: {}", origin_challenge);
@@ -169,11 +168,7 @@ impl Service<Request<Body>> for Server {
         match route {
             (&Method::GET, "/register") => {
                 let (client, captcha_secret) = (self.client.clone(), self.captcha_secret.clone());
-                Box::pin(
-                    Self::parse_body(req.uri().query().unwrap_or("").as_bytes().to_vec())
-                        .and_then(move |body| Self::handle_register(client, captcha_secret, body))
-                        .and_then(Self::convert_reply),
-                )
+                Box::pin(Self::handle_register(client, captcha_secret).and_then(Self::convert_reply))
             },
             (&Method::POST, "/validate") => {
                 let client = self.client.clone();

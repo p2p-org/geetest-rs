@@ -2,15 +2,16 @@ use crate::{
     error::Error,
     models::{
         DigestMod, ServerRegisterRequest, ServerRegisterResponse, ServerValidateRequest, ServerValidateResponse,
-        UserInfo,
+        StatusRequest, StatusResponse, UserInfo,
     },
 };
 use hyper::{
     body::HttpBody,
     client::{Client as HyperClient, HttpConnector},
-    header, Body, Method, Request, Uri,
+    header, Body, Method, Request, Response, Uri,
 };
 use hyper_tls::HttpsConnector;
+use serde::{de::DeserializeOwned, Deserialize};
 use std::io::Write;
 
 type HttpClient = HyperClient<HttpsConnector<HttpConnector>>;
@@ -36,6 +37,16 @@ impl Client {
         }
     }
 
+    pub async fn bypass_status(&self) -> Result<bool, Error> {
+        let request = StatusRequest {
+            captcha_id: self.captcha_id.clone(),
+        };
+        let url: Uri = format!("{}?{}", GEETEST_STATUS_URL, serde_qs::to_string(&request)?).parse()?;
+        let mut reply = self.client.get(url).await?;
+        let result: StatusResponse = Self::read_body(reply).await?;
+        Ok(result.status)
+    }
+
     pub async fn register(&self, user_info: UserInfo) -> Result<String, Error> {
         let request = ServerRegisterRequest {
             user_info,
@@ -48,18 +59,7 @@ impl Client {
 
         log::debug!("geetest request: {}", url);
         let mut reply = self.client.get(url).await?;
-
-        let mut json = Vec::with_capacity(1024);
-
-        while let Some(chunk) = reply.body_mut().data().await {
-            let chunk = chunk?;
-            json.write_all(chunk.as_ref())?;
-        }
-
-        let json_str = String::from_utf8_lossy(&json);
-        log::debug!("geetest response: {}", json_str);
-
-        let result: ServerRegisterResponse = serde_json::from_slice(&json)?;
+        let result: ServerRegisterResponse = Self::read_body(reply).await?;
         Ok(result.challenge)
     }
 
@@ -86,14 +86,16 @@ impl Client {
             .body(Body::from(serde_json::to_vec(&body)?))?;
 
         let mut reply = self.client.request(request).await?;
+        let result: ServerValidateResponse = Self::read_body(reply).await?;
+        Ok(result.seccode)
+    }
 
+    async fn read_body<T: DeserializeOwned>(mut reply: Response<Body>) -> Result<T, Error> {
         let mut json = Vec::with_capacity(1024);
         while let Some(chunk) = reply.body_mut().data().await {
             let chunk = chunk?;
             json.write_all(chunk.as_ref())?;
         }
-
-        let result: ServerValidateResponse = serde_json::from_slice(&json)?;
-        Ok(result.seccode)
+        Ok(serde_json::from_slice(&json)?)
     }
 }
