@@ -157,6 +157,20 @@ impl Server {
             .body(Body::empty())
             .map_err(Into::into)
     }
+
+    async fn handle_error(error: Error) -> Result<Response<Body>, Error> {
+        let error_body = ClientValidateResponse::error(error.to_string());
+
+        let status_code = match error {
+            Error::Query(_) | Error::Json(_) => StatusCode::BAD_REQUEST,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        Ok(Response::builder()
+            .status(status_code)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&error_body)?))?)
+    }
 }
 
 impl Service<Request<Body>> for Server {
@@ -174,7 +188,11 @@ impl Service<Request<Body>> for Server {
         match route {
             (&Method::GET, "/register") => {
                 let (client, captcha_secret) = (self.client.clone(), self.captcha_secret.clone());
-                Box::pin(Self::handle_register(client, captcha_secret).and_then(Self::convert_reply))
+                Box::pin(
+                    Self::handle_register(client, captcha_secret)
+                        .and_then(Self::convert_reply)
+                        .or_else(Self::handle_error),
+                )
             },
             (&Method::POST, "/validate") => {
                 let client = self.client.clone();
@@ -182,7 +200,8 @@ impl Service<Request<Body>> for Server {
                     Self::read_body(req.into_body())
                         .and_then(Self::parse_body)
                         .and_then(|body| Self::handle_validate(client, body))
-                        .and_then(Self::convert_reply),
+                        .and_then(Self::convert_reply)
+                        .or_else(Self::handle_error),
                 )
             },
             _ => Box::pin(Self::bad_request()),

@@ -49,11 +49,11 @@ impl ClientValidateResponse {
         }
     }
 
-    pub fn error(message: &str) -> Self {
+    pub fn error(message: impl Into<String>) -> Self {
         Self {
             result: false,
             version: SDK.to_owned(),
-            msg: Some(message.to_owned()),
+            msg: Some(message.into()),
         }
     }
 }
