@@ -34,7 +34,7 @@ async fn main() -> Result<(), Error> {
     client.register(user_info).await?;
 
     // Validate captcha
-    println!("Captcha info:", client.validate("security-code", "challenge", user_info).await?);
+    println!("Captcha info: {:?}", client.validate("security-code", "challenge", user_info).await?);
 
     Ok(())
 }

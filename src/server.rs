@@ -15,11 +15,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{
     convert::Infallible,
     future::Future,
+    io,
     net::SocketAddr,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
+use tokio::net::ToSocketAddrs;
 
 #[derive(Clone)]
 pub struct Server {
@@ -39,8 +41,13 @@ impl Server {
         }
     }
 
-    pub async fn run(self, addr: &SocketAddr) -> Result<(), hyper::Error> {
-        hyper::Server::bind(addr)
+    pub async fn run(self, addr: impl ToSocketAddrs) -> Result<(), hyper::Error> {
+        let addr = tokio::net::lookup_host(addr)
+            .await?
+            .next()
+            .expect("Socket address resolve failed");
+
+        hyper::Server::bind(&addr)
             .serve(make_service_fn(move |_| {
                 let svc = self.clone();
                 async { Ok::<_, Infallible>(svc) }
