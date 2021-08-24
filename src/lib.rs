@@ -7,5 +7,5 @@ pub use crate::{
     client::Client,
     error::Error,
     models::{ClientType, DigestMod, UserInfo},
-    server::Server,
+    server::{Handler, Server},
 };

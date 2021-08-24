@@ -15,8 +15,6 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{
     convert::Infallible,
     future::Future,
-    io,
-    net::SocketAddr,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -25,11 +23,16 @@ use tokio::net::ToSocketAddrs;
 
 #[derive(Clone)]
 pub struct Server {
+    handler: Handler,
+}
+
+#[derive(Clone)]
+pub struct Handler {
     client: Arc<Client>,
     captcha_secret: String,
 }
 
-impl Server {
+impl Handler {
     pub fn new(captcha_id: impl Into<String>, captcha_secret: impl Into<String>) -> Self {
         Self::from_client(Client::new(captcha_id, DigestMod::Md5), captcha_secret)
     }
@@ -41,35 +44,21 @@ impl Server {
         }
     }
 
-    pub async fn run(self, addr: impl ToSocketAddrs) -> Result<(), hyper::Error> {
-        let addr = tokio::net::lookup_host(addr)
-            .await?
-            .next()
-            .expect("Socket address resolve failed");
-
-        hyper::Server::bind(&addr)
-            .serve(make_service_fn(move |_| {
-                let svc = self.clone();
-                async { Ok::<_, Infallible>(svc) }
-            }))
-            .await
-    }
-
-    async fn handle_register(client: Arc<Client>, captcha_secret: String) -> Result<ClientRegisterResponse, Error> {
+    pub async fn handle_register(self) -> Result<ClientRegisterResponse, Error> {
         log::debug!("handle register");
 
-        let bypass_status = client.bypass_status().await?;
+        let bypass_status = self.client.bypass_status().await?;
 
         if bypass_status {
-            let origin_challenge = client.register(UserInfo::default()).await?;
+            let origin_challenge = self.client.register(UserInfo::default()).await?;
             log::debug!("origin challenge: {}", origin_challenge);
 
-            let challenge = match client.digestmod {
+            let challenge = match self.client.digestmod {
                 #[cfg(feature = "digest-md5")]
                 DigestMod::Md5 => {
                     let mut hasher = md5::Context::new();
                     hasher.consume(origin_challenge);
-                    hasher.consume(&captcha_secret);
+                    hasher.consume(&self.captcha_secret);
                     let digest = hasher.compute();
                     format!("{:x}", digest)
                 },
@@ -78,7 +67,7 @@ impl Server {
                     use sha2::Digest;
                     let mut hasher = sha2::Sha256::new();
                     hasher.update(origin_challenge);
-                    hasher.update(&captcha_secret);
+                    hasher.update(&self.captcha_secret);
                     let digest = hasher.finalize();
                     format!("{:x}", digest)
                 },
@@ -87,7 +76,7 @@ impl Server {
                     use hmac::{Mac, NewMac};
                     let mut hasher = hmac::Hmac::<sha2::Sha256>::new_from_slice(origin_challenge.as_bytes())
                         .expect("HMAC can take key of any size");
-                    hasher.update(captcha_secret.as_bytes());
+                    hasher.update(self.captcha_secret.as_bytes());
                     let digest = hasher.finalize();
                     format!("{:x}", digest.into_bytes())
                 },
@@ -97,7 +86,7 @@ impl Server {
                 success: true,
                 new_captcha: true,
                 challenge,
-                captcha_id: client.captcha_id.clone(),
+                captcha_id: self.client.captcha_id.clone(),
             })
         } else {
             let challenge = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -108,14 +97,14 @@ impl Server {
                 .collect();
             Ok(ClientRegisterResponse {
                 success: false,
-                captcha_id: client.captcha_id.clone(),
+                captcha_id: self.client.captcha_id.clone(),
                 new_captcha: true,
                 challenge,
             })
         }
     }
 
-    async fn handle_validate(client: Arc<Client>, req: ClientValidateRequest) -> Result<ClientValidateResponse, Error> {
+    pub async fn handle_validate(self, req: ClientValidateRequest) -> Result<ClientValidateResponse, Error> {
         let is_valid_request =
             !(req.challenge.trim().is_empty() || req.validate.trim().is_empty() || req.seccode.trim().is_empty());
 
@@ -123,10 +112,13 @@ impl Server {
             return Ok(ClientValidateResponse::error("Invalid request fields"));
         }
 
-        let bypass_status = client.bypass_status().await?;
+        let bypass_status = self.client.bypass_status().await?;
 
         if bypass_status {
-            let seccode = client.validate(req.seccode, req.challenge, UserInfo::default()).await?;
+            let seccode = self
+                .client
+                .validate(req.seccode, req.challenge, UserInfo::default())
+                .await?;
 
             if let Some(_) = seccode {
                 Ok(ClientValidateResponse::success())
@@ -136,6 +128,34 @@ impl Server {
         } else {
             Ok(ClientValidateResponse::success())
         }
+    }
+}
+
+impl Server {
+    pub fn new(captcha_id: impl Into<String>, captcha_secret: impl Into<String>) -> Self {
+        Self::from_client(Client::new(captcha_id, DigestMod::Md5), captcha_secret)
+    }
+
+    pub fn from_client(client: Client, captcha_secret: impl Into<String>) -> Self {
+        Self {
+            handler: Handler::from_client(client, captcha_secret),
+        }
+    }
+
+    pub async fn run(self, addr: impl ToSocketAddrs) -> Result<(), hyper::Error> {
+        let addr = tokio::net::lookup_host(addr)
+            .await
+            .ok()
+            .as_mut()
+            .and_then(Iterator::next)
+            .expect("Socket address resolve failed");
+
+        hyper::Server::bind(&addr)
+            .serve(make_service_fn(move |_| {
+                let svc = self.clone();
+                async { Ok::<_, Infallible>(svc) }
+            }))
+            .await
     }
 
     async fn convert_reply<T: Serialize>(reply: T) -> Result<Response<Body>, Error> {
@@ -193,19 +213,20 @@ impl Service<Request<Body>> for Server {
         log::debug!("Route {:?}", route);
         match route {
             (&Method::GET, "/register") => {
-                let (client, captcha_secret) = (self.client.clone(), self.captcha_secret.clone());
+                let handler = self.handler.clone();
                 Box::pin(
-                    Self::handle_register(client, captcha_secret)
+                    handler
+                        .handle_register()
                         .and_then(Self::convert_reply)
                         .or_else(Self::handle_error),
                 )
             },
             (&Method::POST, "/validate") => {
-                let client = self.client.clone();
+                let handler = self.handler.clone();
                 Box::pin(
                     Self::read_body(req.into_body())
                         .and_then(Self::parse_body)
-                        .and_then(|body| Self::handle_validate(client, body))
+                        .and_then(move |body| handler.handle_validate(body))
                         .and_then(Self::convert_reply)
                         .or_else(Self::handle_error),
                 )

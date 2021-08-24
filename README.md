@@ -56,6 +56,26 @@ async fn main() -> Result<(), Error> {
 
 See also [`examples/server.rs`][2] for full working example.
 
+You can also use `Handler` instead in your custom server framework:
+
+```rust
+use geetest::{Handler, Error, models::ClientValidateRequest};
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    let handler = Handler::new("geetest-captcha-id", "geetest-captcha-secret");
+
+    println!("Register result: {:?}", handler.clone().handle_register().await?);
+    println!("Validate result: {:?}", handler.clone().handle_validate(ClientValidateRequest {
+        challenge: "geetest-challenge".to_owned(),
+        validate: "geetest-validate".to_owned(),
+        seccode: "geetest-seccode".to_owned(),
+    }).await?);
+
+    Ok(())
+}
+```
+
 ## Copyright
 
 This is a product of [P2P Validator][3].
