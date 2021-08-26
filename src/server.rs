@@ -23,12 +23,11 @@ use tokio::net::ToSocketAddrs;
 
 #[derive(Clone)]
 pub struct Server {
-    handler: Handler,
+    handler: Arc<Handler>,
 }
 
-#[derive(Clone)]
 pub struct Handler {
-    client: Arc<Client>,
+    client: Client,
     captcha_secret: String,
 }
 
@@ -39,12 +38,12 @@ impl Handler {
 
     pub fn from_client(client: Client, captcha_secret: impl Into<String>) -> Self {
         Self {
-            client: Arc::new(client),
+            client,
             captcha_secret: captcha_secret.into(),
         }
     }
 
-    pub async fn handle_register(self) -> Result<ClientRegisterResponse, Error> {
+    pub async fn handle_register(self: Arc<Self>) -> Result<ClientRegisterResponse, Error> {
         log::debug!("handle register");
 
         let bypass_status = self.client.bypass_status().await?;
@@ -104,7 +103,7 @@ impl Handler {
         }
     }
 
-    pub async fn handle_validate(self, req: ClientValidateRequest) -> Result<ClientValidateResponse, Error> {
+    pub async fn handle_validate(self: Arc<Self>, req: ClientValidateRequest) -> Result<ClientValidateResponse, Error> {
         let is_valid_request =
             !(req.challenge.trim().is_empty() || req.validate.trim().is_empty() || req.seccode.trim().is_empty());
 
@@ -138,7 +137,7 @@ impl Server {
 
     pub fn from_client(client: Client, captcha_secret: impl Into<String>) -> Self {
         Self {
-            handler: Handler::from_client(client, captcha_secret),
+            handler: Arc::new(Handler::from_client(client, captcha_secret)),
         }
     }
 
@@ -226,7 +225,7 @@ impl Service<Request<Body>> for Server {
                 Box::pin(
                     Self::read_body(req.into_body())
                         .and_then(Self::parse_body)
-                        .and_then(move |body| handler.handle_validate(body))
+                        .and_then(|body| handler.handle_validate(body))
                         .and_then(Self::convert_reply)
                         .or_else(Self::handle_error),
                 )
