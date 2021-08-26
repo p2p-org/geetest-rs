@@ -23,13 +23,16 @@ use tokio::net::ToSocketAddrs;
 
 #[derive(Clone)]
 pub struct Server {
-    handler: Arc<Handler>,
+    handler: Handler,
 }
 
-pub struct Handler {
+struct HandlerImpl {
     client: Client,
     captcha_secret: String,
 }
+
+#[derive(Clone)]
+pub struct Handler(Arc<HandlerImpl>);
 
 impl Handler {
     pub fn new(captcha_id: impl Into<String>, captcha_secret: impl Into<String>) -> Self {
@@ -37,13 +40,23 @@ impl Handler {
     }
 
     pub fn from_client(client: Client, captcha_secret: impl Into<String>) -> Self {
-        Self {
+        Self(Arc::new(HandlerImpl {
             client,
             captcha_secret: captcha_secret.into(),
-        }
+        }))
     }
 
-    pub async fn handle_register(self: Arc<Self>) -> Result<ClientRegisterResponse, Error> {
+    pub fn handle_register(self) -> impl Future<Output=Result<ClientRegisterResponse, Error>> + Send + 'static {
+        self.0.handle_register()
+    }
+
+    pub fn handle_validate(self, request: ClientValidateRequest) -> impl Future<Output=Result<ClientValidateResponse, Error>> + Send + 'static {
+        self.0.handle_validate(request)
+    }
+}
+
+impl HandlerImpl {
+    async fn handle_register(self: Arc<Self>) -> Result<ClientRegisterResponse, Error> {
         log::debug!("handle register");
 
         let bypass_status = self.client.bypass_status().await?;
@@ -103,7 +116,7 @@ impl Handler {
         }
     }
 
-    pub async fn handle_validate(self: Arc<Self>, req: ClientValidateRequest) -> Result<ClientValidateResponse, Error> {
+    async fn handle_validate(self: Arc<Self>, req: ClientValidateRequest) -> Result<ClientValidateResponse, Error> {
         let is_valid_request =
             !(req.challenge.trim().is_empty() || req.validate.trim().is_empty() || req.seccode.trim().is_empty());
 
@@ -137,7 +150,7 @@ impl Server {
 
     pub fn from_client(client: Client, captcha_secret: impl Into<String>) -> Self {
         Self {
-            handler: Arc::new(Handler::from_client(client, captcha_secret)),
+            handler: Handler::from_client(client, captcha_secret),
         }
     }
 
