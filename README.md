@@ -63,7 +63,7 @@ use geetest::{Handler, Error, models::ClientValidateRequest};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let handler = Arc::new(Handler::new("geetest-captcha-id", "geetest-captcha-secret"));
+    let handler = Handler::new("geetest-captcha-id", "geetest-captcha-secret");
 
     println!("Register result: {:?}", handler.clone().handle_register().await?);
     println!("Validate result: {:?}", handler.clone().handle_validate(ClientValidateRequest {
@@ -75,6 +75,9 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 ```
+
+Notice you have to clone `Handler` to make futures `'static`.
+This is a cheap operation, as `Handler` uses `Arc` inside.
 
 ## Copyright
 
