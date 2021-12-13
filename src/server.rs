@@ -46,11 +46,14 @@ impl Handler {
         }))
     }
 
-    pub fn handle_register(self) -> impl Future<Output=Result<ClientRegisterResponse, Error>> + Send + 'static {
+    pub fn handle_register(self) -> impl Future<Output = Result<ClientRegisterResponse, Error>> + Send + 'static {
         self.0.handle_register()
     }
 
-    pub fn handle_validate(self, request: ClientValidateRequest) -> impl Future<Output=Result<ClientValidateResponse, Error>> + Send + 'static {
+    pub fn handle_validate(
+        self,
+        request: ClientValidateRequest,
+    ) -> impl Future<Output = Result<ClientValidateResponse, Error>> + Send + 'static {
         self.0.handle_validate(request)
     }
 }
@@ -149,9 +152,11 @@ impl Server {
     }
 
     pub fn from_client(client: Client, captcha_secret: impl Into<String>) -> Self {
-        Self {
-            handler: Handler::from_client(client, captcha_secret),
-        }
+        Self::from_handler(Handler::from_client(client, captcha_secret))
+    }
+
+    pub fn from_handler(handler: Handler) -> Self {
+        Self { handler }
     }
 
     pub async fn run(self, addr: impl ToSocketAddrs) -> Result<(), hyper::Error> {
